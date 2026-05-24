@@ -1,0 +1,101 @@
+import RequestTracker from './MemoryManager.js';
+import CacheEngine from './CacheEngine.js';
+import CompressionEngine from './CompressionEngine.js';
+import RateLimiter from './RateLimiter.js';
+import MonitoringSystem from './MonitoringSystem.js';
+import OptimizationMiddleware from './optimizationMiddleware.js';
+import LoadShedder from './LoadShedder.js';
+
+class PerformanceManager {
+  constructor(options = {}) {
+    this.options = {
+      enableCompression: options.enableCompression !== false,
+      enableCaching: options.enableCaching !== false,
+      enableRateLimit: options.enableRateLimit !== false,
+      enableMonitoring: options.enableMonitoring !== false,
+      enableLoadShedding: options.enableLoadShedding !== false,
+      enableSecurityHeaders: options.enableSecurityHeaders || false,
+      adminMiddleware: options.adminMiddleware || null,
+      ...options,
+    };
+
+    this.memory = new RequestTracker(this.options);
+    this.loadShedder = new LoadShedder(this.options);
+    this.cache = new CacheEngine(this.options, null);
+    this.compression = new CompressionEngine(this.options, this.loadShedder);
+    this.rateLimit = new RateLimiter(this.options);
+    this.monitoring = new MonitoringSystem(this.options);
+    this.optimization = new OptimizationMiddleware(this.options);
+
+    if (process.env.REDIS_URL) this._initRedis(process.env.REDIS_URL);
+  }
+
+  async _initRedis(url) {
+    try {
+      const { default: Redis } = await import('ioredis');
+      const client = new Redis(url, { maxRetriesPerRequest: 1, retryStrategy: () => null });
+      client.on('error', () => {});
+      this.cache.redis = client;
+    } catch (_) {}
+  }
+
+  initializeMiddleware(app) {
+    if (this.options.enableLoadShedding) app.use(this.loadShedder.middleware());
+    if (this.options.enableMonitoring) app.use(this.monitoring.middleware());
+    if (this.options.enableCompression) app.use(this.compression.middleware());
+    if (this.options.enableRateLimit) app.use(this.rateLimit.middleware());
+    if (this.options.enableCaching) app.use(this.cache.middleware());
+    app.use(this.optimization.middleware());
+    return app;
+  }
+
+  async getStats() {
+    return {
+      memory: this.memory.getStats(),
+      loadShedding: this.loadShedder.getStats(),
+      cache: this.cache.getStats(),
+      compression: this.compression.getStats(),
+      rateLimit: this.rateLimit.getStats(),
+      monitoring: this.monitoring.getStats(),
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  async getHealth() {
+    const stats = await this.getStats();
+    const mem = process.memoryUsage();
+    const heapPercentage = (mem.heapUsed / mem.heapTotal) * 100;
+
+    return {
+      status: this.loadShedder.isOverloaded ? 'critical' : (heapPercentage > 80 ? 'warning' : 'healthy'),
+      uptime: this.formatUptime(process.uptime()),
+      memory: {
+        heapUsed: `${Math.round(mem.heapUsed / 1024 / 1024)} MB`,
+        heapTotal: `${Math.round(mem.heapTotal / 1024 / 1024)} MB`,
+        heapPercentage: `${heapPercentage.toFixed(2)}%`,
+      },
+      stats,
+    };
+  }
+
+  async clearCache() { return this.cache.clear(); }
+
+  forceGC() {
+    if (global.gc) {
+      global.gc();
+      return { message: '✅ Garbage Collection ejecutado exitosamente' };
+    }
+    return { message: '⚠️ GC no disponible. Ejecuta: node --expose-gc server.js' };
+  }
+
+  formatUptime(seconds) {
+    const d = Math.floor(seconds / 86400);
+    const h = Math.floor((seconds % 86400) / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    if (d > 0) return `${d}d ${h}h`;
+    if (h > 0) return `${h}h ${m}m`;
+    return `${m}m`;
+  }
+}
+
+export default PerformanceManager;
