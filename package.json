@@ -1,0 +1,42 @@
+{
+  "name": "velocity-boost",
+  "version": "1.0.2",
+  "description": "🚀 Professional Performance Optimization Module for Node.js APIs - Compatible with Vercel, AWS Lambda, and more",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node examples/basic.js",
+    "dev": "node --expose-gc examples/basic.js",
+    "advanced": "node examples/advanced.js",
+    "test": "node tests/performance.test.js",
+    "vercel": "node examples/vercel.js"
+  },
+  "keywords": [
+    "performance",
+    "optimization",
+    "caching",
+    "compression",
+    "rate-limiting",
+    "monitoring",
+    "vercel",
+    "serverless",
+    "nodejs"
+  ],
+  "author": "AxelDev09",
+  "license": "MIT",
+  "dependencies": {
+    "compression": "^1.7.4",
+    "express": "^4.18.2",
+    "express-rate-limit": "^6.7.0",
+    "dotenv": "^16.3.1"
+  },
+  "optionalDependencies": {
+    "ioredis": "^5.3.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
